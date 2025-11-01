@@ -7,10 +7,6 @@ import argparse
 
 class DataPreprocessor:
 
-    ID_COLUMNS = [
-        'encounter_id', 'patient_nbr'
-    ]
-
     COLUMNS_TO_DROP = [
         'encounter_id', 'patient_nbr', 'weight', 'max_glu_serum', 'A1Cresult'
     ]
@@ -52,9 +48,6 @@ class DataPreprocessor:
         df = pd.read_csv(input_path)
         print(f"Loaded {len(df)} rows, {len(df.columns)} columns")
         
-        # preserve IDs for reference (will add back at the end)
-        ids_df = df[self.ID_COLUMNS].copy() if all(col in df.columns for col in self.ID_COLUMNS) else None
-        
         # drop ID columns AND weight, max_glu_serum, A1Cresult
         print(f"\nDropping columns: {', '.join(self.COLUMNS_TO_DROP)}")
         df = df.drop(columns=[col for col in self.COLUMNS_TO_DROP if col in df.columns])
@@ -64,7 +57,6 @@ class DataPreprocessor:
         if 'readmitted' in df.columns:
             target = df['readmitted'].copy()
             df = df.drop('readmitted', axis=1)
-            # print(f"Separated target variable 'readmitted'")
         
         # replace '?' with NaN
         df = df.replace('?', np.nan)
@@ -73,8 +65,6 @@ class DataPreprocessor:
         initial_count = len(df)
         mask = ~df.isna().any(axis=1)
         df = df[mask]
-        if ids_df is not None:
-            ids_df = ids_df[mask]
         if target is not None:
             target = target[mask]
         
@@ -142,10 +132,8 @@ class DataPreprocessor:
             }, encoder_path)
             print(f"\nEncoder saved to {encoder_path}")
         
-        # add back IDs and target if requested
+        # add back target variable
         result_df = df.copy()
-        if ids_df is not None:
-            result_df = pd.concat([ids_df.reset_index(drop=True), result_df.reset_index(drop=True)], axis=1)
         
         if target is not None:
             # convert target to binary
