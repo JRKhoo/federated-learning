@@ -1,35 +1,23 @@
+import sys
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 import joblib
 import os
 import argparse
+from pathlib import Path
+
+# add root so config is discoverable
+project_root = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(project_root))
+
+import config.preprocess_config as pp_config
 
 class DataPreprocessor:
 
-    COLUMNS_TO_DROP = [
-        'encounter_id', 'patient_nbr', 'weight', 'max_glu_serum', 'A1Cresult'
-    ]
-
-    CATEGORICAL_COLUMNS = [
-        'race', 'gender', 'age',
-        'admission_type_id', 'discharge_disposition_id', 'admission_source_id',
-        'payer_code', 'medical_specialty',
-        'diag_1', 'diag_2', 'diag_3',
-        'metformin', 'repaglinide', 'nateglinide', 'chlorpropamide',
-        'glimepiride', 'acetohexamide', 'glipizide', 'glyburide',
-        'tolbutamide', 'pioglitazone', 'rosiglitazone', 'acarbose',
-        'miglitol', 'troglitazone', 'tolazamide', 'examide', 'citoglipton',
-        'insulin', 'glyburide-metformin', 'glipizide-metformin',
-        'glimepiride-pioglitazone', 'metformin-rosiglitazone',
-        'metformin-pioglitazone', 'change', 'diabetesMed'
-    ]
-    
-    INTEGER_COLUMNS = [
-        'time_in_hospital', 'num_lab_procedures', 'num_procedures',
-        'num_medications', 'number_outpatient', 'number_emergency',
-        'number_inpatient', 'number_diagnoses'
-    ]
+    COLUMNS_TO_DROP = pp_config.COLUMNS_TO_DROP
+    CATEGORICAL_COLUMNS = pp_config.CATEGORICAL_COLUMNS
+    INTEGER_COLUMNS = pp_config.INTEGER_COLUMNS
     
     def __init__(self):
         self.label_encoders = {}

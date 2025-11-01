@@ -18,6 +18,7 @@ federated-learning/
 │  ├─ trainer.py           # Train per hospital
 │  └─ model_tester.py      # Evaluate model
 ├─ config/
+│  ├─ preprocess_config.py # Configure cols to drop
 │  ├─ mlp_config.py        # MLP params
 │  └─ dp_config.py         # DP noise params
 ├─ requirements.txt
@@ -76,7 +77,7 @@ You can run the evaluation independently of training against `test_data.csv`.<br
 Navigate to the root directory (if you are not already there)<br>
 
 Execute the evaluator, passing in path to generated model weights: <br>
-`python src/model_tester.py <path to model weights>`
+`python src/model_tester.py <path to model weights>` <br>
 Evaluator expects weights in `.npz` numpy format.
 
 Example execution:
@@ -101,6 +102,7 @@ The following fields have been dropped:
 - `weight`: >50% Missing values
 - `A1Cresult`: >50% Missing values
 - `max_glu_serum`: >50% Missing values
+- `payer_code`: Used to determine how the patient paid, no training value
 
 For entries with missing values, we chose to drop them instead of conducting imputation, as features with missing values tended to have a high percentage of such missing values, imputation would skew the results significantly.
 
