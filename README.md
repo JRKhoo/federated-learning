@@ -2,6 +2,27 @@
 
 Simulation of federated learning to train a model to predict readmission rates of diabetic patients.
 
+## Directory Structure
+```
+federated-learning/
+├─ data/
+│  ├─ analyzer.py          # Analyze unprocessed data
+│  ├─ preprocessor.py      # Clean, encode, scale
+│  ├─ splitter.py          # Split into hospitals and test
+│  ├─ raw/                 # Original data
+│  ├─ cleaned/             # Preprocessed CSVs
+│  ├─ split/               # Per-hospital and test CSVs
+│  └─ encoders/            # Saved encoders
+├─ global_model/           # Model weights (.npz)
+├─ src/
+│  ├─ trainer.py           # Train per hospital
+│  └─ model_tester.py      # Evaluate model
+├─ config/
+│  ├─ mlp_config.py        # MLP params
+│  └─ dp_config.py         # DP noise params
+├─ requirements.txt
+└─ README.md
+```
 ## Setup
 Initialize virtual environment (first time setup)
 ```bash
@@ -18,6 +39,51 @@ Install requirements
 pip install -r requirements.txt
 ```
 
+## Training
+We are using the Scikit-learn framework to implement a multilayer perceptron model.
+
+### Execution
+Navigate to the root directory (if you are not already there)<br>
+
+Execute the trainer, passing in path to data file to train on: <br>
+`python src/trainer.py <path to data file>`
+
+Example execution:
+```bash
+python src/trainer.py data/split/hospital1.csv
+```
+
+Model weights will be generated in `.npz` numpy format and stored in `global_model` directory. <br>
+Evaluation of the model is done automatically against `test_data.csv`.
+
+### Model Tuning
+Tuning of the multilayer perceptron is done in the `config/mlp_config.py` file. <br>
+Tuning of differential privacy noise is done in the `config/dp_config.py` file. <br>
+Changes will be reflected upon execution of `trainer.py`.
+
+## Evaluation
+We evaluate the model using 4 main metrics:
+- `Accuracy`: Proportion of correct predictions (both positive and negative)
+- `Precision`: Of all predicted readmissions, what proportion was actually readmitted?
+- `Recall`: Of all actual readmissions, what proportion did the model correctly identify?
+- `F1 Score`: Balance of precision and recall
+
+### Execution
+You can run the evaluation independently of training against `test_data.csv`.<br>
+**!!! Use the same model parameters for evaluation as used in training !!!** <br>
+
+
+Navigate to the root directory (if you are not already there)<br>
+
+Execute the evaluator, passing in path to generated model weights: <br>
+`python src/model_tester.py <path to model weights>`
+Evaluator expects weights in `.npz` numpy format.
+
+Example execution:
+```bash
+python src/model_tester.py global_model/hospital1.npz
+```
+
 ## Data
 This project uses the "Diabetes 130‑US hospitals for years 1999-2008" dataset from the UCI Machine Learning Repository:
 https://archive-beta.ics.uci.edu/dataset/296/diabetes+130-us+hospitals+for+years+1999-2008
@@ -25,6 +91,18 @@ https://archive-beta.ics.uci.edu/dataset/296/diabetes+130-us+hospitals+for+years
 The dataset contains roughly 100k hospital admission records (patient encounters) for diabetic patients collected across 130 US hospitals. Each row is an encounter with demographic, admission/discharge, diagnosis, lab test, procedure and medication fields (examples: race, gender, age, num_lab_procedures, number_inpatient, A1Cresult, medication fields). 
 
 The primary target used in this project is the "readmitted" field, which indicates whether the patient was readmitted within 30 days ("<30"), after 30 days (">30"), or not readmitted ("NO").
+
+### Preprocessed Data
+Data has already been preprocessed according to the following logic. <br>
+
+The following fields have been dropped:
+- `encounter_id`: Unique identifier, no training value
+- `patient_nbr`: Unique identifier, no training value
+- `weight`: >50% Missing values
+- `A1Cresult`: >50% Missing values
+- `max_glu_serum`: >50% Missing values
+
+For entries with missing values, we chose to drop them instead of conducting imputation, as features with missing values tended to have a high percentage of such missing values, imputation would skew the results significantly.
 
 ### Preprocessing steps
 Navigate to the data directory, all data processing is done here.
@@ -39,13 +117,19 @@ python preprocessor.py
 - `--input_file`: specify input file, defaults to `raw/diabetic_data.csv`
 - `--output_file`: specify output file, defaults to `cleaned/cleaned_data.csv`
 - `--encoder_path`: specify encoder to use, defaults to `encoders/encoders.pkl`
-- `--fit_encoders`: if specified, use existing encoder specified in `--encoder_path`, else create new
+- `--fit_encoders`: if specified, use existing encoder specified in `--encoder_path`, else create new encoder stored at `data/encoders/encoders.pkl`
 <br> <br>
 
 Split the cleaned data into test and training data.
 ```bash
 python splitter.py
 ```
+
+### Identification Variables
+| Variable Name | Type |
+|--------------|------|
+| encounter_id | Integer |
+| patient_nbr | Integer |
 
 ### Categorical Variables (Label Encoded)
 
@@ -109,13 +193,3 @@ Scaled to have mean=0 and std=1:
 | number_emergency | Integer | Number of emergency visits in year before | 0-76 |
 | number_inpatient | Integer | Number of inpatient visits in year before | 0-21 |
 | number_diagnoses | Integer | Number of diagnoses entered | 1-16 |
-
-### Excluded Variables (Not Used in Training):
-
-| Variable Name | Type | Reason for Exclusion |
-|--------------|------|---------------------|
-| encounter_id | Integer | Unique identifier, no predictive value |
-| patient_nbr | Integer | Unique identifier, no predictive value |
-| Weight | Integer | >50% missing values |
-| max_glu_serum | Categorical | >50% missing values |
-| A1Cresult | Categorical | >50% missing values |

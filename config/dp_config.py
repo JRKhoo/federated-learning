@@ -1,0 +1,2 @@
+EPSILON = 1.0
+DELTA = 0.00001
