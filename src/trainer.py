@@ -100,24 +100,14 @@ class FederatedTrainer:
             random_state=mlp_config.RANDOM_STATE,
             verbose=False
         )
-        enc = joblib.load("data/encoders/encoders.pkl")
-        self.scaler = enc["scaler"]
-        # these 2 keys depend on what you saved — adjust names to match
-        self.numeric_columns = enc.get("numeric_columns", None)
-        self.categorical_columns = enc.get("categorical_columns", None)
         
     # load data from CSV file
     def load_data(self, csv_file: str) -> Tuple[np.ndarray, np.ndarray]:
         df = pd.read_csv(csv_file)
         
-        # everything else is features (still as DF!)
+        # separate features and target (last col is target)
         features_df = df.iloc[:, :-1].copy()
-        # last column is target
         target = df.iloc[:, -1].values
-
-        if self.numeric_columns:
-            cols_to_scale = [c for c in self.numeric_columns if c in features_df.columns]
-            features_df[cols_to_scale] = self.scaler.transform(features_df[cols_to_scale])
 
          # set model classes
         unique_classes = np.unique(target)
@@ -159,12 +149,11 @@ class FederatedTrainer:
             f"({y_train.sum()} positives, {(y_train==0).sum()} negatives)"
         )
 
-        # train on balanced data
         self.model.fit(X_train, y_train)
 
-        # show score on original (imbalanced) hospital data
-        print(f"Training completed. Score on ORIGINAL data: {self.model.score(features, target):.4f}\n")
+        print(f"Training completed. Score on data: {self.model.score(X_train, y_train):.4f}\n")
 
+        # extract weights and biases
         weights = self.get_weights()
         
         return weights

@@ -35,13 +35,6 @@ class ModelTester:
             random_state=mlp_config.RANDOM_STATE,
             verbose=False
         )
-
-        # 👇 load the SAME encoders/scaler used in training
-        # (same path you used in trainer.py)
-        enc = joblib.load("data/encoders/encoders.pkl")
-        self.scaler = enc["scaler"]
-        self.categorical_columns = enc.get("categorical_columns", [])
-        self.numeric_columns = enc.get("numeric_columns", [])
     
     # load weights into model
     def load_weights(self, weights_file: str, num_classes: int = None) -> None:        
@@ -80,23 +73,19 @@ class ModelTester:
         df = pd.read_csv(csv_file)
         
         # separate features and target (last col is target)
-        X_df = df.iloc[:, :-1].copy()
-        y = df.iloc[:, -1].values
-
-        if self.numeric_columns:
-            cols_to_scale = [c for c in self.numeric_columns if c in X_df.columns]
-            X_df[cols_to_scale] = self.scaler.transform(X_df[cols_to_scale])
+        features = df.iloc[:, :-1].values
+        target = df.iloc[:, -1].values
         
         # set model classes based on unique labels in target column
-        unique_classes = np.unique(y)
+        unique_classes = np.unique(target)
         self.model.classes_ = unique_classes
         self.model._label_binarizer = LabelBinarizer()
         self.model._label_binarizer.fit(self.model.classes_)
         
-        print(f"Loaded {len(X_df)} test samples with {X_df.shape[1]} features")
+        print(f"Loaded {len(features)} test samples with {features.shape[1]} features")
         print(f"Detected classes in test data: {unique_classes}\n")
         
-        return X_df.values, y
+        return features, target
     
     # evaluate model on test data and compute metrics
     def evaluate_model(self, test_csv: str) -> dict:
@@ -138,13 +127,11 @@ class ModelTester:
         recall = recall_score(test_target, target_prediction, average=average_method, zero_division=0)
         f1 = f1_score(test_target, target_prediction, average=average_method, zero_division=0)
 
-        # advanced metrics
         roc_auc = None
         pr_auc = None
         if is_binary and y_proba is not None:
             roc_auc = roc_auc_score(test_target, y_proba)
             pr_auc = average_precision_score(test_target, y_proba)
-
 
         cm = confusion_matrix(test_target, target_prediction)
 
@@ -154,10 +141,8 @@ class ModelTester:
         print(f"Precision: {precision:.4f}")
         print(f"Recall:    {recall:.4f}")
         print(f"F1 Score:  {f1:.4f}\n")
-        if roc_auc is not None:
-            print(f"ROC AUC:    {roc_auc:.4f}")
-        if pr_auc is not None:
-            print(f"PR AUC:     {pr_auc:.4f}")
+        print(f"ROC AUC:    {roc_auc:.4f}")
+        print(f"PR AUC:     {pr_auc:.4f}")
         print("\nConfusion Matrix (rows=true, cols=pred):")
         print(cm)
         print("\nClassification Report:")
@@ -169,8 +154,8 @@ class ModelTester:
             "precision": precision,
             "recall": recall,
             "f1_score": f1,
-            "roc_auc": roc_auc,      # <--- add
-            "pr_auc": pr_auc,        # <--- add
+            "roc_auc": roc_auc,    
+            "pr_auc": pr_auc, 
             "num_samples": len(test_target),
             "num_classes": len(unique_classes),
         }
