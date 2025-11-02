@@ -13,8 +13,11 @@ federated-learning/
 │  ├─ cleaned/             # Preprocessed CSVs
 │  ├─ split/               # Per-hospital and test CSVs
 │  └─ encoders/            # Saved encoders
-├─ global_model/           # Model weights (.npz)
+├─ weights/                # Model weights (.npz)
+│  ├─ {*}_weights.npz      # Individual hospital weights
+│  └─ global.npz           # Global model weights
 ├─ src/
+│  ├─ aggregator.py        # Aggregate weights
 │  ├─ trainer.py           # Train per hospital
 │  └─ model_tester.py      # Evaluate model
 ├─ config/
@@ -25,60 +28,85 @@ federated-learning/
 └─ README.md
 ```
 ## Setup
-Initialize virtual environment (first time setup)
+Initialize virtual environment **(first time setup)**:
 ```bash
 python -m venv .venv
 ```
 
-Activate virtual environment (subsequent use)
+Activate virtual environment **(subsequent use)**:
 ```bash
 .venv\Scripts\Activate
 ```
 
-Install requirements
+Install requirements:
 ```bash
 pip install -r requirements.txt
 ```
 
-## Training
-We are using the Scikit-learn framework to implement a multilayer perceptron model.
+## Individual Training
+We are using the Scikit-learn framework to implement a multilayer perceptron model. It takes in pre-processed data and outputs model weights.
 
 ### Execution
-Navigate to the root directory (if you are not already there)<br>
+Navigate to the root directory (if you are not already there).<br>
 
 Execute the trainer, passing in path to data file to train on: <br>
-`python src/trainer.py <path to data file>`
+`python src/trainer.py <path to data file>` <br>
+**!!! Data should be already pre-processed !!!**
 
 Example execution:
 ```bash
 python src/trainer.py data/split/hospital1.csv
 ```
-
-Model weights will be generated in `.npz` numpy format and stored in `global_model` directory. <br>
-Evaluation of the model is done automatically against `test_data.csv`.
+- Model weights will be generated in `.npz` numpy format and stored in `weights` directory.
+- Evaluation of the model is done automatically against `test_data.csv`.
 
 ### Model Tuning
-Tuning of the multilayer perceptron is done in the `config/mlp_config.py` file. <br>
-Tuning of differential privacy noise is done in the `config/dp_config.py` file. <br>
-Changes will be reflected upon execution of `trainer.py`.
+- Tuning of the multilayer perceptron is done in the `config/mlp_config.py` file.
+- Tuning of differential privacy noise is done in the `config/dp_config.py` file.
+- Changes will be reflected upon execution of `trainer.py`.
+
+## Aggregation
+We use Federated Averaging (FedAvg) to compute global model weights from individual weight files.
+
+### Execution
+Navigate to the root directory (if you are not already there).<br>
+
+Execute the aggregator:
+```bash
+python src/aggregator.py
+```
+- Aggregator expects weights in `.npz` numpy format.
+- Global model weights will be generated in `.npz` format and stored in `weights` directory.
+- Evaluation of the model is done automatically against `test_data.csv`. <br>
 
 ## Evaluation
+For our results, our model predicts the following outcomes:
+- "**Positive**" or "**1**" represents that the patient was readmitted. 
+- "**Negative**" or "**0**" represents that the patient was **not** readmitted.
+<br> <br>
+
 We evaluate the model using 4 main metrics:
 - `Accuracy`: Proportion of correct predictions (both positive and negative)
 - `Precision`: Of all predicted readmissions, what proportion was actually readmitted?
 - `Recall`: Of all actual readmissions, what proportion did the model correctly identify?
 - `F1 Score`: Balance of precision and recall
+<br> <br>
+
+Interpreting these results:
+- `High precision`: Few false alarms, when the model says "readmitted", it's usually right
+- `Low precision`: Many false alarms, model incorrectly flags patients as likely to be readmitted
+- `High recall`: Model catches most readmissions, a few slip through undetected
+- `Low recall`: Model misses many actual readmissions
 
 ### Execution
 You can run the evaluation independently of training against `test_data.csv`.<br>
 **!!! Use the same model parameters for evaluation as used in training !!!** <br>
 
-
 Navigate to the root directory (if you are not already there)<br>
 
 Execute the evaluator, passing in path to generated model weights: <br>
 `python src/model_tester.py <path to model weights>` <br>
-Evaluator expects weights in `.npz` numpy format.
+- Evaluator expects weights in `.npz` numpy format.
 
 Example execution:
 ```bash
@@ -91,7 +119,9 @@ https://archive-beta.ics.uci.edu/dataset/296/diabetes+130-us+hospitals+for+years
 
 The dataset contains roughly 100k hospital admission records (patient encounters) for diabetic patients collected across 130 US hospitals. Each row is an encounter with demographic, admission/discharge, diagnosis, lab test, procedure and medication fields (examples: race, gender, age, num_lab_procedures, number_inpatient, A1Cresult, medication fields). 
 
-The primary target used in this project is the "readmitted" field, which indicates whether the patient was readmitted within 30 days ("<30"), after 30 days (">30"), or not readmitted ("NO").
+The primary target used in this project is the "readmitted" field, which indicates whether the patient was readmitted within 30 days ("<30"), after 30 days (">30"), or not readmitted ("NO"). 
+
+As long as the patient is readmitted, be it within 30 days or after 30 days, we take it as the patient was readmitted, a "positive" outcome "1". If the patient was not readmitted, we take it as a "negative" outcome "0".
 
 ### Preprocessed Data
 Data has already been preprocessed according to the following logic. <br>
@@ -125,6 +155,15 @@ python preprocessor.py
 Split the cleaned data into test and training data.
 ```bash
 python splitter.py
+```
+
+### Preprocessor Tuning
+Control which variables to drop and include in the `preprocess_config.py` file.
+
+### Data Analysis
+Run the analyzer on the data to view more information about the dataset:
+```bash
+python analyzer.py
 ```
 
 ### Identification Variables
