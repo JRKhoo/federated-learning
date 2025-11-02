@@ -7,7 +7,10 @@ sys.path.insert(0, str(project_root))
 
 import pandas as pd
 import numpy as np
+import joblib
 from sklearn.neural_network import MLPClassifier
+from sklearn.utils import resample
+from sklearn.preprocessing import LabelBinarizer
 from typing import List, Tuple
 
 import config.mlp_config as mlp_config
@@ -97,26 +100,71 @@ class FederatedTrainer:
             random_state=mlp_config.RANDOM_STATE,
             verbose=False
         )
+        enc = joblib.load("data/encoders/encoders.pkl")
+        self.scaler = enc["scaler"]
+        # these 2 keys depend on what you saved — adjust names to match
+        self.numeric_columns = enc.get("numeric_columns", None)
+        self.categorical_columns = enc.get("categorical_columns", None)
         
     # load data from CSV file
     def load_data(self, csv_file: str) -> Tuple[np.ndarray, np.ndarray]:
         df = pd.read_csv(csv_file)
         
-        # separate features and target (last col is target)
-        features = df.iloc[:, :-1].values
+        # everything else is features (still as DF!)
+        features_df = df.iloc[:, :-1].copy()
+        # last column is target
         target = df.iloc[:, -1].values
 
-        return features, target
+        if self.numeric_columns:
+            cols_to_scale = [c for c in self.numeric_columns if c in features_df.columns]
+            features_df[cols_to_scale] = self.scaler.transform(features_df[cols_to_scale])
+
+         # set model classes
+        unique_classes = np.unique(target)
+        self.model.classes_ = unique_classes
+        self.model._label_binarizer = LabelBinarizer()
+        self.model._label_binarizer.fit(self.model.classes_)
+
+        print(f"Loaded {len(features_df)} test samples with {features_df.shape[1]} features")
+        print(f"Detected classes in test data: {unique_classes}\n")
+
+        return features_df.values, target
 
     # train the model and return weights
-    def train(self, csv_file: str) -> List[np.ndarray]:
+    def train(self, csv_file: str):
         features, target = self.load_data(csv_file)
 
         print(f"Training on {len(features)} samples...")
-        self.model.fit(features, target)
-        print(f"Training completed. Score: {self.model.score(features, target):.4f}\n")
 
-        # extract weights and biases
+        # build df to resample
+        df = pd.DataFrame(features)
+        df["target"] = target
+
+        majority = df[df["target"] == 0]
+        minority = df[df["target"] == 1]
+
+        minority_up = resample(
+            minority,
+            replace=True,
+            n_samples=len(majority),
+            random_state=42
+        )
+
+        df_balanced = pd.concat([majority, minority_up]).sample(frac=1, random_state=42)
+        X_train = df_balanced.drop(columns=["target"]).values
+        y_train = df_balanced["target"].values
+
+        print(
+            f"Balanced training: {len(y_train)} samples "
+            f"({y_train.sum()} positives, {(y_train==0).sum()} negatives)"
+        )
+
+        # train on balanced data
+        self.model.fit(X_train, y_train)
+
+        # show score on original (imbalanced) hospital data
+        print(f"Training completed. Score on ORIGINAL data: {self.model.score(features, target):.4f}\n")
+
         weights = self.get_weights()
         
         return weights

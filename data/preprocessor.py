@@ -47,25 +47,41 @@ class DataPreprocessor:
             df = df.drop('readmitted', axis=1)
         
         # replace '?' with NaN
-        df = df.replace('?', np.nan)
+        #df = df.replace('?', np.nan)
         
         # remove rows with missing values
-        initial_count = len(df)
-        mask = ~df.isna().any(axis=1)
-        df = df[mask]
-        if target is not None:
-            target = target[mask]
-        
-        removed_count = initial_count - len(df)
-        print(f"Removed {removed_count} rows with missing values")
-        print(f"Remaining: {len(df)} rows")
-        
+        # initial_count = len(df)
+        # mask = ~df.isna().any(axis=1)
+        # df = df[mask]
+        # if target is not None:
+        #     target = target[mask]
+
+        df = df.replace('?', np.nan)
+
         # identify categorical and numerical columns
         categorical_cols = [col for col in self.CATEGORICAL_COLUMNS if col in df.columns]
-        integer_cols = [col for col in self.INTEGER_COLUMNS if col in df.columns]
+
+        # everything else that is number → scale it
+        numeric_cols = df.select_dtypes(include=['int64', 'float64']).columns.tolist()
+
+        # fill numeric with median
+        for col in numeric_cols:
+            df[col] = df[col].fillna(df[col].median())
+
+        # fill categorical with mode
+        for col in categorical_cols:
+            df[col] = df[col].fillna(df[col].mode()[0])
+        
+        #removed_count = initial_count - len(df)
+        #print(f"Removed {removed_count} rows with missing values")
+        #print(f"Remaining: {len(df)} rows")
+
+        # but remove target from numeric cols if present
+        if 'readmitted' in numeric_cols:
+            numeric_cols.remove('readmitted')
         
         print(f"Categorical columns: {len(categorical_cols)}")
-        print(f"Integer columns: {len(integer_cols)}")
+        print(f"Numeric columns: {len(numeric_cols)}")
         
         # load/create encoders
         if not fit_encoders and encoder_path and os.path.exists(encoder_path):
@@ -100,14 +116,13 @@ class DataPreprocessor:
         
         print(f"Encoded {len(categorical_cols)} categorical columns")
         
-        # scale integer columns
-        if len(integer_cols) > 0:
-            print(f"\nScaling integer variables...")
+        if len(numeric_cols) > 0:
+            print(f"\nScaling numeric variables...")
             if fit_encoders:
-                df[integer_cols] = self.scaler.fit_transform(df[integer_cols])
+                df[numeric_cols] = self.scaler.fit_transform(df[numeric_cols])
             else:
-                df[integer_cols] = self.scaler.transform(df[integer_cols])
-            print(f"Scaled {len(integer_cols)} integer columns")
+                df[numeric_cols] = self.scaler.transform(df[numeric_cols])
+            print(f"Scaled {len(numeric_cols)} numeric columns")
         
         # save encoders
         if fit_encoders and encoder_path:
@@ -116,7 +131,7 @@ class DataPreprocessor:
                 'label_encoders': self.label_encoders,
                 'scaler': self.scaler,
                 'categorical_columns': categorical_cols,
-                'integer_columns': integer_cols
+                'numeric_columns': numeric_cols
             }, encoder_path)
             print(f"\nEncoder saved to {encoder_path}")
         
