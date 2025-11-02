@@ -104,6 +104,7 @@ class ModelTester:
             # if for some reason predict_proba is not available
             y_proba = None
 
+        # do a threshold sweep
         best = {}
         for t in [0.25, 0.3, 0.35, 0.4, 0.5]:
             y_pred_t = (y_proba >= t).astype(int)
@@ -114,7 +115,7 @@ class ModelTester:
 
         print("\nThreshold sweep:")
         for t, (p, r, f) in best.items():
-            print(f"t={t:.2f} → P={p:.3f} R={r:.3f} F1={f:.3f}")
+            print(f"t={t:.2f} → Precision={p:.3f} Recall={r:.3f} F1 Score={f:.3f}")
         
         # determine if binary or multiclass classification
         unique_classes = np.unique(test_target)
@@ -136,7 +137,7 @@ class ModelTester:
         cm = confusion_matrix(test_target, target_prediction)
 
         # print metrics
-        print("Evaluation Metrics:")
+        print("\nEvaluation Metrics:")
         print(f"Accuracy:  {accuracy:.4f}")
         print(f"Precision: {precision:.4f}")
         print(f"Recall:    {recall:.4f}")

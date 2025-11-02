@@ -221,7 +221,7 @@ def main():
     # save weights to numpy format
     csv_path = Path(csv_file)
     hospital_name = csv_path.stem
-    output_file = f"global_model/{hospital_name}_weights.npz"
+    output_file = f"weights/{hospital_name}_weights.npz"
     np.savez(output_file, *weights)
     print(f"\nWeights saved to: {output_file}")
     
