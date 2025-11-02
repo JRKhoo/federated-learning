@@ -108,14 +108,15 @@ class ModelTester:
         best = {}
         for t in [0.25, 0.3, 0.35, 0.4, 0.5]:
             y_pred_t = (y_proba >= t).astype(int)
+            accuracy_t = accuracy_score(test_target, y_pred_t)
             f1_t = f1_score(test_target, y_pred_t, zero_division=0)
             rec_t = recall_score(test_target, y_pred_t, zero_division=0)
             prec_t = precision_score(test_target, y_pred_t, zero_division=0)
-            best[t] = (prec_t, rec_t, f1_t)
+            best[t] = (accuracy_t, prec_t, rec_t, f1_t)
 
         print("\nThreshold sweep:")
-        for t, (p, r, f) in best.items():
-            print(f"t={t:.2f} → Precision={p:.3f} Recall={r:.3f} F1 Score={f:.3f}")
+        for t, (a, p, r, f) in best.items():
+            print(f"t={t:.2f} → Accuracy={a:.3f} Precision={p:.3f} Recall={r:.3f} F1 Score={f:.3f}")
         
         # determine if binary or multiclass classification
         unique_classes = np.unique(test_target)

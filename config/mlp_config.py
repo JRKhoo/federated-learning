@@ -3,7 +3,7 @@
 # tuple, defines number of neurons in each hidden layer
 # e.g., (64, 32) for two hidden layers with 64 and 32 neurons respectively
 # more layers can capture more complex patterns but can also risk overfitting
-HIDDEN_LAYERS = (64, 32)
+HIDDEN_LAYERS = (128, 64, 32, 16)
 
 # activation: 
 # defines activation function for the hidden layers
