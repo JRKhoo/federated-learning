@@ -116,10 +116,103 @@ def analyze_missing_values(data_path):
     return missing_stats
 
 
+def analyze_readmission_rates(data_path):
+    """
+    Analyze readmission rates in the dataset.
+    
+    Args:
+        data_path: Path to the CSV file
+    """
+    print(f"\n{'='*80}")
+    print(f"Readmission Analysis: {os.path.basename(data_path)}")
+    print(f"{'='*80}\n")
+    
+    # Load data
+    df = pd.read_csv(data_path)
+    
+    # Check if readmitted column exists
+    if 'readmitted' not in df.columns:
+        print("Error: 'readmitted' column not found in dataset")
+        return None
+    
+    # Get readmission counts and percentages
+    readmission_counts = df['readmitted'].value_counts()
+    readmission_percentages = df['readmitted'].value_counts(normalize=True) * 100
+    
+    # Total patients
+    total_patients = len(df)
+    
+    print(f"OVERALL READMISSION STATISTICS:")
+    print(f"{'-'*80}")
+    print(f"Total patients: {total_patients:,}\n")
+    
+    # Display statistics for each category
+    print(f"READMISSION BREAKDOWN:")
+    print(f"{'-'*80}")
+    print(f"{'Category':<25} {'Count':>15} {'Percentage':>15}")
+    print(f"{'-'*80}")
+    
+    # Define the expected categories
+    categories = {
+        'NO': 'Not Readmitted',
+        '<30': 'Readmitted < 30 days',
+        '>30': 'Readmitted > 30 days'
+    }
+    
+    for category, description in categories.items():
+        count = readmission_counts.get(category, 0)
+        percentage = readmission_percentages.get(category, 0)
+        print(f"{description:<25} {count:>15,} {percentage:>14.2f}%")
+    
+    # Summary statistics
+    print(f"\n{'-'*80}")
+    print(f"SUMMARY:")
+    print(f"{'-'*80}")
+    
+    # Count of patients who were readmitted (either <30 or >30)
+    readmitted_categories = ['<30', '>30']
+    readmitted_count = sum(readmission_counts.get(cat, 0) for cat in readmitted_categories)
+    readmitted_percentage = (readmitted_count / total_patients) * 100
+    
+    not_readmitted_count = readmission_counts.get('NO', 0)
+    not_readmitted_percentage = (not_readmitted_count / total_patients) * 100
+    
+    print(f"{'Patients Readmitted (any)':<25} {readmitted_count:>15,} {readmitted_percentage:>14.2f}%")
+    print(f"{'Patients Not Readmitted':<25} {not_readmitted_count:>15,} {not_readmitted_percentage:>14.2f}%")
+    
+    # Additional insights
+    if '<30' in readmission_counts and '>30' in readmission_counts:
+        early_readmit = readmission_counts['<30']
+        late_readmit = readmission_counts['>30']
+        
+        if readmitted_count > 0:
+            early_pct_of_readmit = (early_readmit / readmitted_count) * 100
+            late_pct_of_readmit = (late_readmit / readmitted_count) * 100
+            
+            print(f"\n{'-'*80}")
+            print(f"AMONG READMITTED PATIENTS:")
+            print(f"{'-'*80}")
+            print(f"{'Early readmission (<30 days)':<25} {early_readmit:>15,} {early_pct_of_readmit:>14.2f}%")
+            print(f"{'Late readmission (>30 days)':<25} {late_readmit:>15,} {late_pct_of_readmit:>14.2f}%")
+    
+    print(f"\n{'='*80}\n")
+    
+    return {
+        'total': total_patients,
+        'not_readmitted': not_readmitted_count,
+        'readmitted_less_30': readmission_counts.get('<30', 0),
+        'readmitted_more_30': readmission_counts.get('>30', 0),
+        'total_readmitted': readmitted_count
+    }
+
+
 def main():
-    parser = argparse.ArgumentParser(description='Analyze missing values in dataset')
+    parser = argparse.ArgumentParser(description='Analyze dataset')
     parser.add_argument('--input_file', type=str, default='raw/diabetic_data.csv',
                         help='Path to input CSV file')
+    parser.add_argument('--analysis_type', type=str, default='all',
+                        choices=['missing', 'readmission', 'all'],
+                        help='Type of analysis to perform')
     parser.add_argument('--save_report', action='store_true',
                         help='Save detailed report to CSV')
     parser.add_argument('--output_path', type=str, default='data/missing_values_report.csv',
@@ -131,13 +224,19 @@ def main():
         print(f"Error: File not found - {args.input_file}")
         return
     
-    # Analyze missing values
-    missing_stats = analyze_missing_values(args.input_file)
+    # Perform requested analysis
+    if args.analysis_type in ['missing', 'all']:
+        # Analyze missing values
+        missing_stats = analyze_missing_values(args.input_file)
+        
+        # Save report if requested
+        if args.save_report:
+            missing_stats.to_csv(args.output_path, index=False)
+            print(f"Detailed missing values report saved to: {args.output_path}")
     
-    # Save report if requested
-    if args.save_report:
-        missing_stats.to_csv(args.output_path, index=False)
-        print(f"Detailed report saved to: {args.output_path}")
+    if args.analysis_type in ['readmission', 'all']:
+        # Analyze readmission rates
+        readmission_stats = analyze_readmission_rates(args.input_file)
 
 
 if __name__ == '__main__':
