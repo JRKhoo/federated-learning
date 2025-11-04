@@ -90,6 +90,8 @@ We evaluate the model using 4 main metrics:
 - `Precision`: Of all predicted readmissions, what proportion was actually readmitted?
 - `Recall`: Of all actual readmissions, what proportion did the model correctly identify?
 - `F1 Score`: Balance of precision and recall
+- `Receiver Operating Characteristic Area Under Curve (ROC AUC)`: Probability that a randomly chosen readmitted patient (positive) is assigned a higher score than a randomly chosen non‑readmitted patient (negative).
+- `Precision Recall Area Under the Curve (PR AUC)`: How well the model retrieves true readmissions among the top‑scored patients while balancing false alarms.
 <br> <br>
 
 Interpreting these results:
