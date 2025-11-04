@@ -20,7 +20,7 @@ SOLVER = 'adam'
 # learning_rate_init:
 # initial learning rate for weight updates
 # float (usually 0.0001 < x < 0.01), default 0.001
-LEARNING_RATE_INIT = 0.0007
+LEARNING_RATE_INIT = 0.0009
 
 # learning_rate:
 # defines the step size for weight updates
@@ -32,7 +32,7 @@ LEARNING_RATE = 'adaptive'
 # alpha:
 # L2 penalty (regularization term) to prevent overfitting
 # float (usually 0.00001 < x < 0.01), default 0.0001
-ALPHA = 0.001
+ALPHA = 0.0005
 
 # batch_size:
 # number of samples per gradient update
@@ -44,7 +44,7 @@ BATCH_SIZE = 'auto'
 # max_iter:
 # maximum number of training iterations
 # integer, default 200
-MAX_ITER = 500
+MAX_ITER = 300
 
 # early_stopping:
 # whether to stop training when validation score is not improving
@@ -71,4 +71,4 @@ TOL = 0.00005
 # random_state:
 # random seed for reproducibility, each seed gives different weight initialization
 # keep constant to reproduce results
-RANDOM_STATE = 67
+RANDOM_STATE = 70
