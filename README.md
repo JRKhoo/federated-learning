@@ -6,27 +6,44 @@ Simulation of federated learning to train a model to predict readmission rates o
 ```
 federated-learning/
 ├─ data/
-│  ├─ analyzer.py          # Analyze unprocessed data
+│  ├─ raw_analyzer.py      # Analyze unprocessed data
 │  ├─ preprocessor.py      # Clean, encode, scale
 │  ├─ splitter.py          # Split into hospitals and test
+│  ├─ cleaned_analyzer.py  # Analyze preprocessed data
+│  │
 │  ├─ raw/                 # Original data
 │  ├─ cleaned/             # Preprocessed CSVs
 │  ├─ split/               # Per-hospital and test CSVs
 │  └─ encoders/            # Saved encoders
+│
 ├─ weights/                # Model weights (.npz)
 │  ├─ {*}_weights.npz      # Individual hospital weights
 │  └─ global.npz           # Global model weights
+│
 ├─ src/
 │  ├─ aggregator.py        # Aggregate weights
 │  ├─ trainer.py           # Train per hospital
 │  └─ model_tester.py      # Evaluate model
+│
 ├─ config/
 │  ├─ preprocess_config.py # Configure cols to drop
 │  ├─ mlp_config.py        # MLP params
 │  └─ dp_config.py         # DP noise params
-├─ requirements.txt
+│
+├─ requirements.txt        # Dependencies
 └─ README.md
 ```
+## Overall Analysis Flow (For Experimenting)
+Refer to the respective sections below for more details.
+1. Setup environment (`Setup` section)
+2. Configure preprocessing (`Data` section)
+3. Preprocess data (`Data` section)
+4. Analyze cleaned data (`Data` section)
+5. Configure MLP model parameters (`Training` section)
+6. Train MLP model per hospital (`Training` section)
+7. Aggregate individual hospital weights (`Aggregation` section)
+8. Record results
+
 ## Setup
 Initialize virtual environment **(first time setup)**:
 ```bash
@@ -43,7 +60,7 @@ Install requirements:
 pip install -r requirements.txt
 ```
 
-## Individual Training
+## Training
 We are using the Scikit-learn framework to implement a multilayer perceptron model. It takes in pre-processed data and outputs model weights.
 
 ### Execution
@@ -163,9 +180,13 @@ python splitter.py
 Control which variables to drop and include in the `preprocess_config.py` file.
 
 ### Data Analysis
-Run the analyzer on the data to view more information about the dataset:
+To view more information about the raw dataset:
 ```bash
-python analyzer.py
+python raw_analyzer.py
+```
+To view information about the cleaned dataset:
+```bash
+python cleaned_analyzer.py
 ```
 
 ### Identification Variables
