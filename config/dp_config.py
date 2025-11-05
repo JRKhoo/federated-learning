@@ -43,7 +43,7 @@ SENSITIVITY = 1.0
 # ---------------------------
 # These defaults favor reasonable utility while providing some privacy.
 # You can increase EPSILON for better utility or decrease for stronger privacy.
-EPSILON = 5.0      # per-round epsilon (larger → less noise per round)
+EPSILON = 1.0    # per-round epsilon (larger → less noise per round)
 DELTA = 1e-5       # failure probability parameter (small)
 CLIP_NORM = 1.0    # L2 clip applied to updates (larger → allow bigger updates)
 
@@ -54,4 +54,4 @@ CLIP_NORM = 1.0    # L2 clip applied to updates (larger → allow bigger updates
 # compute per_round = TOTAL_EPSILON / rounds and use that epsilon per round.
 TOTAL_EPSILON = 50.0
 # Enable auto-distribution of TOTAL_EPSILON across rounds (per_round = TOTAL_EPSILON / rounds)
-AUTO_DISTRIBUTE = True
+AUTO_DISTRIBUTE = False
