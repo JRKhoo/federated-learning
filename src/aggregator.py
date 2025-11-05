@@ -1,8 +1,9 @@
 import sys
 from pathlib import Path
 import numpy as np
-from typing import List
+from typing import List, Optional, Tuple
 
+import config.dp_config as dp_config
 from model_tester import ModelTester
 
 
@@ -17,7 +18,50 @@ class FederatedAggregator:
         weights = [data[f'arr_{i}'] for i in range(len(data.files))]
         return weights
     
-    def aggregate_weights(self, weight_files: List[str]) -> List[np.ndarray]:
+    def add_dp_noise(self, weights: List[np.ndarray], base_weights: Optional[List[np.ndarray]] = None, *, epsilon: Optional[float] = None, delta: Optional[float] = None, clip_norm: Optional[float] = None) -> List[np.ndarray]:
+        """
+        Add DP noise to aggregated weights using the Gaussian mechanism.
+        If base_weights is provided, treats input as updates and clips before adding noise.
+        """
+        # use config values if not overridden
+        if epsilon is None:
+            epsilon = dp_config.EPSILON
+        if delta is None:
+            delta = dp_config.DELTA
+        if clip_norm is None:
+            clip_norm = dp_config.CLIP_NORM
+            
+        print(f"\nApplying central differential privacy...")
+        print(f"Parameters: CLIP_NORM={clip_norm}, EPSILON={epsilon}, DELTA={delta}")
+        
+        if base_weights is not None:
+            # Treat as updates: compute and clip
+            updates = [w - w_base for w, w_base in zip(weights, base_weights)]
+            global_norm = np.sqrt(sum(np.sum(u ** 2) for u in updates))
+            clip_factor = min(1.0, float(clip_norm) / (global_norm + 1e-10))
+            weights = [w_base + (u * clip_factor) for w_base, u in zip(base_weights, updates)]
+            
+            print(f"Update L2 norm: {global_norm:.4f}")
+            print(f"Clip factor: {clip_factor:.4f}")
+        
+        # Add Gaussian noise scaled by sensitivity/epsilon
+        sigma = clip_norm * np.sqrt(2 * np.log(1.25 / delta)) / epsilon
+        print(f"Noise scale (sigma): {sigma:.4f}")
+        
+        noisy_weights = []
+        for i, w in enumerate(weights):
+            noise = np.random.normal(0, sigma, w.shape)
+            noisy_w = w + noise
+            noisy_weights.append(noisy_w)
+            
+            weight_type = "Weights" if i % 2 == 0 else "Biases"
+            layer = i // 2 + 1
+            noise_norm = np.sqrt(np.sum(noise ** 2))
+            print(f"Layer {layer} {weight_type} noise L2 norm: {noise_norm:.4f}")
+            
+        return noisy_weights
+
+    def aggregate_weights(self, weight_files: List[str], base_weights: Optional[List[np.ndarray]] = None) -> List[np.ndarray]:
         if not weight_files:
             raise ValueError("No weight files provided for aggregation")
         
@@ -45,7 +89,8 @@ class FederatedAggregator:
             weight_type = "Weights" if layer_idx % 2 == 0 else "Biases"
             print(f"  Layer {layer_idx//2 + 1} {weight_type}: shape {avg_weight.shape}")
         
-        self.global_weights = aggregated_weights
+        # Apply DP noise after aggregation
+        self.global_weights = self.add_dp_noise(aggregated_weights, base_weights)
         print(f"\nAggregation complete")
         
         return aggregated_weights

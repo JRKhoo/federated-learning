@@ -92,16 +92,9 @@ def run(rounds: int = 50, evaluate_every: int = 10, local_epochs: int = 1):
             # if no global weights yet, pass None so trainer initializes from scratch
             initial = None if global_weights is None else global_weights
 
-            local_trained = trainer.train_from(str(csv_path), initial_weights=initial, epochs=local_epochs)
-
-            # original weights for DP calculation
-            if global_weights is None:
-                orig = zeros_like_weights(local_trained)
-            else:
-                orig = global_weights
-
-            noisy = trainer.add_dp_noise(local_trained, orig, epsilon=per_round_epsilon, delta=dp_config.DELTA, clip_norm=dp_config.CLIP_NORM)
-            local_noisy_weights.append(noisy)
+            # Just get raw weights without DP noise
+            local_weights = trainer.train_from(str(csv_path), initial_weights=initial, epochs=local_epochs)
+            local_noisy_weights.append(local_weights)
 
         # compute noise scale (sigma) for logging
         clip_norm = float(dp_config.CLIP_NORM)
@@ -124,7 +117,31 @@ def run(rounds: int = 50, evaluate_every: int = 10, local_epochs: int = 1):
                 else:
                     accum = accum + arr * w
             aggregated.append(accum)
-        global_weights = aggregated
+
+        # Add DP noise at central aggregator after averaging
+        if global_weights is None:
+            orig = zeros_like_weights(aggregated)
+        else:
+            orig = global_weights
+            
+        # compute noise scale (sigma) for logging
+        clip_norm = float(dp_config.CLIP_NORM)
+        delta = float(dp_config.DELTA)
+        eps = max(1e-12, float(per_round_epsilon))
+        sigma = clip_norm * np.sqrt(2 * np.log(1.25 / delta)) / eps
+        
+        # Apply central DP noise
+        updates = [w - w_old for w, w_old in zip(aggregated, orig)]
+        global_norm = np.sqrt(sum(np.sum(u ** 2) for u in updates))
+        clip_factor = min(1.0, float(clip_norm) / (global_norm + 1e-10))
+        clipped_updates = [u * clip_factor for u in updates]
+        noisy_updates = [u + np.random.normal(0, sigma, u.shape) for u in clipped_updates]
+        global_weights = [w_old + u for w_old, u in zip(orig, noisy_updates)]
+        
+        print(f"\nCentral DP noise added:")
+        print(f"Update L2 norm: {global_norm:.4f}")
+        print(f"Clip factor: {clip_factor:.4f}")
+        print(f"Noise scale (sigma): {sigma:.4f}")
 
         # save global weights for this round
         out_file = weights_dir / f"global_round_{r}.npz"

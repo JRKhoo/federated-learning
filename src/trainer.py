@@ -177,45 +177,13 @@ class FederatedTrainer:
 
         return weights
 
-    # insert differential privacy noise into weights
-    def add_dp_noise(self, weights: List[np.ndarray], original_weights: List[np.ndarray], *, epsilon: Optional[float] = None, delta: Optional[float] = None, clip_norm: Optional[float] = None) -> List[np.ndarray]:
+    # compute weight updates without DP noise
+    def compute_updates(self, weights: List[np.ndarray], original_weights: List[np.ndarray]) -> List[np.ndarray]:
         """
-        Add DP noise to the weight updates (output perturbation on updates).
-
-        `weights` and `original_weights` are both interleaved lists: [W1, b1, W2, b2, ...].
-        This function computes updates = weights - original_weights, clips the global L2 norm
-        of the updates to `clip_norm`, adds Gaussian noise scaled by (clip_norm * sqrt(2 ln(1.25/delta)) / epsilon),
-        and returns the new noisy weights = original_weights + noisy_updates.
+        Compute weight updates as (weights - original_weights).
+        Returns the raw updates without any noise or clipping.
         """
-
-        print("Adding differential privacy noise to weight updates...")
-        # allow caller to override per-round DP params; fall back to config
-        if epsilon is None:
-            epsilon = dp_config.EPSILON
-        if delta is None:
-            delta = dp_config.DELTA
-        if clip_norm is None:
-            clip_norm = dp_config.CLIP_NORM
-
-        # calculate updates (gradients)
-        updates = [w - w_old for w, w_old in zip(weights, original_weights)]
-
-        # compute global L2 norm across all updates
-        global_norm = np.sqrt(sum(np.sum(u ** 2) for u in updates))
-
-        # clip factor
-        clip_factor = min(1.0, float(clip_norm) / (global_norm + 1e-10))
-        clipped_updates = [u * clip_factor for u in updates]
-
-        # noise scale (Gaussian mechanism)
-        sigma = clip_norm * np.sqrt(2 * np.log(1.25 / delta)) / (epsilon + 1e-12)
-
-        noisy_updates = [u + np.random.normal(0, sigma, u.shape) for u in clipped_updates]
-
-        # produce noised weights = original_weights + noisy_updates
-        noisified_weights = [w_old + u_noisy for w_old, u_noisy in zip(original_weights, noisy_updates)]
-
-        return noisified_weights
+        return [w - w_old for w, w_old in zip(weights, original_weights)]
 
 def test_model(output_file: str) -> None:
     # initialize tester
