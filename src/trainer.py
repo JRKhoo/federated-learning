@@ -8,7 +8,8 @@ sys.path.insert(0, str(project_root))
 import pandas as pd
 import numpy as np
 from sklearn.neural_network import MLPClassifier
-from typing import List, Tuple
+from sklearn.preprocessing import LabelBinarizer
+from typing import List, Tuple, Optional
 
 import config.mlp_config as mlp_config
 import config.dp_config as dp_config
@@ -110,44 +111,111 @@ class FederatedTrainer:
 
     # train the model and return weights
     def train(self, csv_file: str) -> List[np.ndarray]:
+        # backward compatible single-call train (no initial weights)
+        return self.train_from(csv_file)
+
+    def train_from(self, csv_file: str, initial_weights: Optional[List[np.ndarray]] = None, epochs: int = 1) -> List[np.ndarray]:
+        """
+        Train the model on the given CSV. If `initial_weights` is provided (interleaved list: W1,b1,W2,b2,...)
+        the model will continue training from those weights using `partial_fit`. `epochs` controls how many
+        partial_fit passes are made over the local data (default 1 per round).
+        Returns the trained weights in the interleaved format.
+        """
         features, target = self.load_data(csv_file)
 
-        print(f"Training on {len(features)} samples...")
-        self.model.fit(features, target)
-        print(f"Training completed. Score: {self.model.score(features, target):.4f}\n")
+        print(f"Training on {len(features)} samples... (epochs={epochs})")
+
+        classes = np.unique(target)
+
+        # prepare label binarizer required by sklearn partial_fit
+        lb = LabelBinarizer()
+        lb.fit(classes)
+        # ensure classes_ and _label_binarizer are available for partial_fit
+        self.model.classes_ = classes
+        self.model._label_binarizer = lb
+
+        # if initial weights provided, set model weights to them
+        if initial_weights is not None:
+            # convert interleaved list to coefs_ and intercepts_
+            coefs = [initial_weights[i] for i in range(0, len(initial_weights), 2)]
+            intercepts = [initial_weights[i] for i in range(1, len(initial_weights), 2)]
+
+            # ensure copies so we don't mutate caller arrays
+            self.model.coefs_ = [c.copy() for c in coefs]
+            self.model.intercepts_ = [b.copy() for b in intercepts]
+
+            # set minimal attributes required by sklearn downstream code
+            self.model.n_layers_ = len(self.model.coefs_) + 1
+            self.model.n_outputs_ = self.model.intercepts_[-1].shape[0]
+            self.model.out_activation_ = 'softmax' if self.model.n_outputs_ > 1 else 'logistic'
+
+        # perform `epochs` rounds of partial_fit over local data
+        for e in range(epochs):
+            # partial_fit updates weights in-place and preserves previous weights
+            self.model.partial_fit(features, target, classes=classes)
+
+        print(f"Training completed. Score (train): {self.model.score(features, target):.4f}\n")
 
         # extract weights and biases
-        weights = self.get_weights()
-        
+        weights: List[np.ndarray] = []
+        for coef, intercept in zip(self.model.coefs_, self.model.intercepts_):
+            weights.append(coef.copy())
+            weights.append(intercept.copy())
+
         return weights
     
     # extract weights and biases from the trained model
     def get_weights(self) -> List[np.ndarray]:
         if self.model is None:
             raise ValueError("Model has not been trained yet")
-        
-        weights = []
-        
-        # extract weights and biases from each layer
+
+        weights: List[np.ndarray] = []
         print("Extracting model weights and biases...")
         for coef, intercept in zip(self.model.coefs_, self.model.intercepts_):
             weights.append(coef.copy())
             weights.append(intercept.copy())
-        
-        noisified_weights = self.add_dp_noise(weights)
 
-        return noisified_weights
+        return weights
 
     # insert differential privacy noise into weights
-    def add_dp_noise(self, weights: List[np.ndarray]) -> List[np.ndarray]:
-        
-        print("Adding differential privacy noise to weights...")
-        epsilon = dp_config.EPSILON
-        delta = dp_config.DELTA
+    def add_dp_noise(self, weights: List[np.ndarray], original_weights: List[np.ndarray], *, epsilon: Optional[float] = None, delta: Optional[float] = None, clip_norm: Optional[float] = None) -> List[np.ndarray]:
+        """
+        Add DP noise to the weight updates (output perturbation on updates).
 
-        # placeholder for DP noise addition logic
-        
-        return weights
+        `weights` and `original_weights` are both interleaved lists: [W1, b1, W2, b2, ...].
+        This function computes updates = weights - original_weights, clips the global L2 norm
+        of the updates to `clip_norm`, adds Gaussian noise scaled by (clip_norm * sqrt(2 ln(1.25/delta)) / epsilon),
+        and returns the new noisy weights = original_weights + noisy_updates.
+        """
+
+        print("Adding differential privacy noise to weight updates...")
+        # allow caller to override per-round DP params; fall back to config
+        if epsilon is None:
+            epsilon = dp_config.EPSILON
+        if delta is None:
+            delta = dp_config.DELTA
+        if clip_norm is None:
+            clip_norm = dp_config.CLIP_NORM
+
+        # calculate updates (gradients)
+        updates = [w - w_old for w, w_old in zip(weights, original_weights)]
+
+        # compute global L2 norm across all updates
+        global_norm = np.sqrt(sum(np.sum(u ** 2) for u in updates))
+
+        # clip factor
+        clip_factor = min(1.0, float(clip_norm) / (global_norm + 1e-10))
+        clipped_updates = [u * clip_factor for u in updates]
+
+        # noise scale (Gaussian mechanism)
+        sigma = clip_norm * np.sqrt(2 * np.log(1.25 / delta)) / (epsilon + 1e-12)
+
+        noisy_updates = [u + np.random.normal(0, sigma, u.shape) for u in clipped_updates]
+
+        # produce noised weights = original_weights + noisy_updates
+        noisified_weights = [w_old + u_noisy for w_old, u_noisy in zip(original_weights, noisy_updates)]
+
+        return noisified_weights
 
 def test_model(output_file: str) -> None:
     # initialize tester
