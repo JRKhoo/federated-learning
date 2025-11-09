@@ -1,4 +1,4 @@
-# Federate Learning Simulation
+# Federated Learning Simulation
 
 Simulation of federated learning to train a model to predict readmission rates of diabetic patients.
 
@@ -102,7 +102,7 @@ For our results, our model predicts the following outcomes:
 - "**Negative**" or "**0**" represents that the patient was **not** readmitted.
 <br> <br>
 
-We evaluate the model using 4 main metrics:
+We evaluate the model using 6 main metrics:
 - `Accuracy`: Proportion of correct predictions (both positive and negative)
 - `Precision`: Of all predicted readmissions, what proportion was actually readmitted?
 - `Recall`: Of all actual readmissions, what proportion did the model correctly identify?
