@@ -29,7 +29,7 @@ def zeros_like_weights(weights_template: List[np.ndarray]) -> List[np.ndarray]:
     return [np.zeros_like(w) for w in weights_template]
 
 
-def run(rounds: int = 50, evaluate_every: int = 10, local_epochs: int = 1):
+def run(rounds: int = 50, evaluate_every: int = 10, local_epochs: int = 1, seed: int | None = None):
     base = Path(__file__).resolve().parents[1]
     split_dir = base / "data" / "split"
     weights_dir = base / "weights"
@@ -96,7 +96,7 @@ def run(rounds: int = 50, evaluate_every: int = 10, local_epochs: int = 1):
             local_weights = trainer.train_from(str(csv_path), initial_weights=initial, epochs=local_epochs)
             local_noisy_weights.append(local_weights)
 
-        # compute noise scale (sigma) for logging
+    # compute noise scale (sigma) for logging
         clip_norm = float(dp_config.CLIP_NORM)
         delta = float(dp_config.DELTA)
         # avoid division by zero
@@ -131,6 +131,17 @@ def run(rounds: int = 50, evaluate_every: int = 10, local_epochs: int = 1):
         sigma = clip_norm * np.sqrt(2 * np.log(1.25 / delta)) / eps
         
         # Apply central DP noise
+        # If a seed is provided, seed the numpy RNG deterministically per-round so noise is
+        # repeatable across runs. We use seed + r to produce a different but deterministic
+        # noise realization each round.
+        if seed is not None:
+            try:
+                s = int(seed)
+            except Exception:
+                s = None
+            if s is not None:
+                np.random.seed(s + r)
+
         updates = [w - w_old for w, w_old in zip(aggregated, orig)]
         global_norm = np.sqrt(sum(np.sum(u ** 2) for u in updates))
         clip_factor = min(1.0, float(clip_norm) / (global_norm + 1e-10))
@@ -185,8 +196,9 @@ def main():
     rounds = 50
     evaluate_every = 10
     local_epochs = 1
+    seed = None
 
-    # allow CLI overrides: rounds, evaluate_every, local_epochs
+    # allow CLI overrides: rounds, evaluate_every, local_epochs, seed
     if len(sys.argv) > 1:
         try:
             rounds = int(sys.argv[1])
@@ -202,8 +214,13 @@ def main():
             local_epochs = int(sys.argv[3])
         except ValueError:
             pass
+    if len(sys.argv) > 4:
+        try:
+            seed = int(sys.argv[4])
+        except ValueError:
+            seed = None
 
-    run(rounds=rounds, evaluate_every=evaluate_every, local_epochs=local_epochs)
+    run(rounds=rounds, evaluate_every=evaluate_every, local_epochs=local_epochs, seed=seed)
 
 
 if __name__ == "__main__":
