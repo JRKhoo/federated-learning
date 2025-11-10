@@ -5,34 +5,36 @@ Simulation of federated learning to train a model to predict readmission rates o
 ## Directory Structure
 ```
 federated-learning/
-├─ data/
-│  ├─ raw_analyzer.py      # Analyze unprocessed data
-│  ├─ preprocessor.py      # Clean, encode, scale
-│  ├─ splitter.py          # Split into hospitals and test
-│  ├─ cleaned_analyzer.py  # Analyze preprocessed data
-│  │
-│  ├─ raw/                 # Original data
-│  ├─ cleaned/             # Preprocessed CSVs
-│  ├─ split/               # Per-hospital and test CSVs
-│  └─ encoders/            # Saved encoders
-│
-├─ weights/                # Model weights (.npz)
-│  ├─ {*}_weights.npz      # Individual hospital weights
-│  └─ global.npz           # Global model weights
-│
-├─ src/
-│  ├─ aggregator.py        # Aggregate weights
-│  ├─ trainer.py           # Train per hospital
-│  └─ model_tester.py      # Evaluate model
-│
+├─ README.md
+├─ requirements.txt
+├─ run_federated.sh          # convenience wrapper (calls src/run_federated.py)
 ├─ config/
-│  ├─ preprocess_config.py # Configure cols to drop
-│  ├─ mlp_config.py        # MLP params
-│  └─ dp_config.py         # DP noise params
-│
-├─ requirements.txt        # Dependencies
-└─ README.md
+│  ├─ __init__.py
+│  ├─ dp_config.py          # DP config (EPSILON, DELTA, CLIP_NORM, ...)
+│  ├─ mlp_config.py         # MLP hyperparameters
+│  └─ preprocess_config.py  # columns to drop / preprocessing choices
+├─ data/
+│  ├─ preprocessor.py       # clean, encode, scale
+│  ├─ splitter.py           # split cleaned data into per-hospital + test
+│  ├─ raw_analyzer.py
+│  ├─ cleaned_analyzer.py
+│  ├─ raw/                  # original CSVs (raw/diabetic_data.csv)
+│  ├─ cleaned/              # cleaned/cleaned_data.csv
+│  ├─ split/                # hospital1.csv, hospital2.csv, hospital3.csv, test_data.csv
+│  └─ encoders/             # encoders/encoders.pkl
+├─ src/
+│  ├─ trainer.py            # per-hospital training + DP noise helper
+│  ├─ aggregator.py         # aggregate weights and save global model
+│  ├─ model_tester.py       # load weights and evaluate on test set
+│  └─ run_federated.py      # orchestrates multi-round federated simulation
+└─ weights/
+   ├─ hospital1_weights.npz
+   ├─ hospital2_weights.npz
+   ├─ hospital3_weights.npz
+   ├─ global_round_<r>.npz  # per-round global models
+   └─ metrics.csv           # per-round metrics and privacy-related fields
 ```
+
 ## Overall Analysis Flow (For Experimenting)
 Refer to the respective sections below for more details.
 1. Setup environment (`Setup` section)
