@@ -1,6 +1,8 @@
 import sys
 from pathlib import Path
 import numpy as np
+import random
+import os
 from typing import List
 
 from trainer import FederatedTrainer
@@ -29,7 +31,7 @@ def zeros_like_weights(weights_template: List[np.ndarray]) -> List[np.ndarray]:
     return [np.zeros_like(w) for w in weights_template]
 
 
-def run(rounds: int = 50, evaluate_every: int = 10, local_epochs: int = 1):
+def run(rounds: int = 50, evaluate_every: int = 10, local_epochs: int = 1, seed: int | None = None):
     base = Path(__file__).resolve().parents[1]
     split_dir = base / "data" / "split"
     weights_dir = base / "weights"
@@ -74,6 +76,22 @@ def run(rounds: int = 50, evaluate_every: int = 10, local_epochs: int = 1):
         sample_counts.append(max(n, 0))
 
     total_samples = sum(sample_counts) if sum(sample_counts) > 0 else len(hospital_csvs)
+
+    # if seed provided, set global RNGs to make DP noise deterministic and record run info
+    if seed is not None:
+        try:
+            seed = int(seed)
+        except Exception:
+            seed = None
+    if seed is not None:
+        random.seed(seed)
+        np.random.seed(seed)
+        # record run info for traceability
+        try:
+            with open(weights_dir / "run_info.txt", "a") as rf:
+                rf.write(f"seed={seed}\n")
+        except Exception:
+            pass
 
     # create trainer per client (reused) to keep code simple
     trainers = [FederatedTrainer() for _ in hospital_csvs]
@@ -168,6 +186,7 @@ def main():
     rounds = 50
     evaluate_every = 10
     local_epochs = 1
+    seed = None
 
     # allow CLI overrides: rounds, evaluate_every, local_epochs
     if len(sys.argv) > 1:
@@ -185,8 +204,13 @@ def main():
             local_epochs = int(sys.argv[3])
         except ValueError:
             pass
+    if len(sys.argv) > 4:
+        try:
+            seed = int(sys.argv[4])
+        except ValueError:
+            seed = None
 
-    run(rounds=rounds, evaluate_every=evaluate_every, local_epochs=local_epochs)
+    run(rounds=rounds, evaluate_every=evaluate_every, local_epochs=local_epochs, seed=seed)
 
 
 if __name__ == "__main__":
