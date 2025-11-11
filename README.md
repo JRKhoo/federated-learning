@@ -5,34 +5,36 @@ Simulation of federated learning to train a model to predict readmission rates o
 ## Directory Structure
 ```
 federated-learning/
-├─ data/
-│  ├─ raw_analyzer.py      # Analyze unprocessed data
-│  ├─ preprocessor.py      # Clean, encode, scale
-│  ├─ splitter.py          # Split into hospitals and test
-│  ├─ cleaned_analyzer.py  # Analyze preprocessed data
-│  │
-│  ├─ raw/                 # Original data
-│  ├─ cleaned/             # Preprocessed CSVs
-│  ├─ split/               # Per-hospital and test CSVs
-│  └─ encoders/            # Saved encoders
-│
-├─ weights/                # Model weights (.npz)
-│  ├─ {*}_weights.npz      # Individual hospital weights
-│  └─ global.npz           # Global model weights
-│
-├─ src/
-│  ├─ aggregator.py        # Aggregate weights
-│  ├─ trainer.py           # Train per hospital
-│  └─ model_tester.py      # Evaluate model
-│
+├─ README.md
+├─ requirements.txt
+├─ run_federated.sh          # convenience wrapper (calls src/run_federated.py)
 ├─ config/
-│  ├─ preprocess_config.py # Configure cols to drop
-│  ├─ mlp_config.py        # MLP params
-│  └─ dp_config.py         # DP noise params
-│
-├─ requirements.txt        # Dependencies
-└─ README.md
+│  ├─ __init__.py
+│  ├─ dp_config.py          # DP config (EPSILON, DELTA, CLIP_NORM, ...)
+│  ├─ mlp_config.py         # MLP hyperparameters
+│  └─ preprocess_config.py  # columns to drop / preprocessing choices
+├─ data/
+│  ├─ preprocessor.py       # clean, encode, scale
+│  ├─ splitter.py           # split cleaned data into per-hospital + test
+│  ├─ raw_analyzer.py
+│  ├─ cleaned_analyzer.py
+│  ├─ raw/                  # original CSVs (raw/diabetic_data.csv)
+│  ├─ cleaned/              # cleaned/cleaned_data.csv
+│  ├─ split/                # hospital1.csv, hospital2.csv, hospital3.csv, test_data.csv
+│  └─ encoders/             # encoders/encoders.pkl
+├─ src/
+│  ├─ trainer.py            # per-hospital training + DP noise helper
+│  ├─ aggregator.py         # aggregate weights and save global model
+│  ├─ model_tester.py       # load weights and evaluate on test set
+│  └─ run_federated.py      # orchestrates multi-round federated simulation
+└─ weights/
+   ├─ hospital1_weights.npz
+   ├─ hospital2_weights.npz
+   ├─ hospital3_weights.npz
+   ├─ global_round_<r>.npz  # per-round global models
+   └─ metrics.csv           # per-round metrics and privacy-related fields
 ```
+
 ## Overall Analysis Flow (For Experimenting)
 Refer to the respective sections below for more details.
 1. Setup environment (`Setup` section)
@@ -96,6 +98,10 @@ python src/aggregator.py
 - Global model weights will be generated in `.npz` format and stored in `weights` directory.
 - Evaluation of the model is done automatically against `test_data.csv`. <br>
 
+Note: This repository also contains a convenience orchestration script that runs a full
+federated simulation (local training at each hospital, differential privacy injection,
+and central aggregation) across multiple rounds — see the next section.
+
 ## Evaluation
 For our results, our model predicts the following outcomes:
 - "**Positive**" or "**1**" represents that the patient was readmitted. 
@@ -133,6 +139,42 @@ python src/model_tester.py global_model/hospital1.npz
 ```
 
 ## Data
+
+## Federated simulation (orchestration)
+
+This project includes a small orchestration script to run a full federated simulation that:
+- Performs local training on each hospital's split dataset
+- Injects differential privacy noise into the local model weights (per-client) before sending them to the server
+- Aggregates the (noisy) local weights using weighted Federated Averaging (FedAvg)
+- Evaluates and records metrics periodically
+
+Files of interest:
+- `run_federated.sh` — convenience shell wrapper (default rounds = 50). Usage:
+
+```bash
+# default: 50 rounds, evaluate every 10 rounds, 1 local epoch per round
+./run_federated.sh [rounds] [evaluate_every] [local_epochs]
+```
+
+- `src/run_federated.py` — the Python orchestration script. Behavior highlights:
+	- Default behavior runs 50 rounds of local training followed by central aggregation.
+	- For each round the script:
+		1. Loads each hospital CSV from `data/split/` (e.g., `hospital1.csv`, ...).
+		2. Calls the trainer to perform local training for `local_epochs` on that hospital's data.
+		3. The trainer injects Differential Privacy (DP) noise into the local weights before they are returned to the orchestrator. In other words: DP is applied locally on client-side weights prior to sending them to the aggregator.
+		4. The orchestrator computes a weighted average (by client sample count) of the noisy local weights and saves the resulting global model into `weights/` (per-round `global_round_<r>.npz` and `global.npz`).
+		5. Periodically (or at the final round) the global model is evaluated against `data/split/test_data.csv` and metrics are appended to `weights/metrics.csv`.
+
+DP/Privacy specifics:
+- DP parameters and behavior are configured in `config/dp_config.py` (epsilon, delta, clip norm, and any auto-distribution settings).
+- By default the code will either use a fixed `EPSILON` or automatically distribute a `TOTAL_EPSILON` across rounds when `AUTO_DISTRIBUTE` is enabled.
+- The noise mechanism uses a Gaussian mechanism calibrated to the configured epsilon/delta and clip norm. Because noise is injected locally (per-hospital), the global aggregation receives already-noised updates.
+
+Outputs and logs:
+- Global model weights: `weights/global_round_<r>.npz` and `weights/global.npz` (latest)
+- Metrics CSV: `weights/metrics.csv` (contains per-round epsilon, sigma, total samples, and evaluation metrics when run)
+- The scripts print helpful diagnostics to stdout — look for per-round summaries describing clipping/noise behaviour and evaluation results.
+
 This project uses the "Diabetes 130‑US hospitals for years 1999-2008" dataset from the UCI Machine Learning Repository:
 https://archive-beta.ics.uci.edu/dataset/296/diabetes+130-us+hospitals+for+years+1999-2008
 
